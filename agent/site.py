@@ -650,19 +650,22 @@ class Site(Base):
             )
             region = auth.get("REGION")
 
+            # ARETENIC PATCH: honour ENDPOINT_URL so S3-compatible stores work.
+            # Press already sends it (Agent._get_offsite_backup_config builds
+            # auth["ENDPOINT_URL"] from Backup Bucket.endpoint_url), and Press's
+            # own client uses it for download links and deletes -- but this
+            # upload path dropped it, so boto3 resolved
+            # <bucket>.s3.<region>.amazonaws.com and every offsite backup to
+            # Cloudflare R2 died with EndpointConnectionError.
+            client_kwargs = {
+                "aws_access_key_id": auth["ACCESS_KEY"],
+                "aws_secret_access_key": auth["SECRET_KEY"],
+            }
             if region:
-                s3 = boto3.client(
-                    "s3",
-                    aws_access_key_id=auth["ACCESS_KEY"],
-                    aws_secret_access_key=auth["SECRET_KEY"],
-                    region_name=region,
-                )
-            else:
-                s3 = boto3.client(
-                    "s3",
-                    aws_access_key_id=auth["ACCESS_KEY"],
-                    aws_secret_access_key=auth["SECRET_KEY"],
-                )
+                client_kwargs["region_name"] = region.strip()
+            if auth.get("ENDPOINT_URL"):
+                client_kwargs["endpoint_url"] = auth["ENDPOINT_URL"].strip()
+            s3 = boto3.client("s3", **client_kwargs)
 
             for backup_file in backup_files.values():
                 file_name = backup_file["file"].split(os.sep)[-1]
