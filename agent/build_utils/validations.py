@@ -135,6 +135,11 @@ def check_python_syntax(dirpath: str) -> str:
     - -o: optimize level, 0 is no optimization
     """
     _python = get_python_path(dirpath)
+    if _python is None:
+        # No interpreter new enough on this host. Compiling with an older one would
+        # report valid new syntax as errors, so skip the pre-check; the image build
+        # still compiles everything with the app's own Python.
+        return ""
     command = f"{_python} -m compileall -q -o 0 {dirpath}"
     proc = subprocess.run(
         shlex.split(command),
@@ -150,8 +155,11 @@ def check_python_syntax(dirpath: str) -> str:
     return proc.stdout
 
 
-def get_python_path(dirpath: str) -> str:
-    """Check for python version in the pyproject.toml file if present else return bench python path"""
+def get_python_path(dirpath: str) -> str | None:
+    """Check for python version in the pyproject.toml file if present else return bench python path.
+
+    Returns None when the app needs Python 3.14 and the host has no python3.14.
+    """
     pyproject_path = os.path.join(dirpath, "pyproject.toml")
     if os.path.isfile(pyproject_path):
         # To handle broken toml files or missing fields
@@ -163,10 +171,10 @@ def get_python_path(dirpath: str) -> str:
                 if version_spec.match(sv.Version("3.14.0")):
                     # try to resolve python3.14 path
                     python_path = shutil.which("python3.14")
-                    if python_path:
-                        return python_path
-                    # Temporary hardcoding until python 3.14 until we move to build server
-                    return "/usr/bin/python3.14"
+                    # Upstream returned a hardcoded /usr/bin/python3.14 here, which does not
+                    # exist on a server Press provisions: subprocess raised FileNotFoundError
+                    # and the build hung at Running with every step Pending.
+                    return python_path
 
     return _get_server_python_path()
 
