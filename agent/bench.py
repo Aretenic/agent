@@ -730,6 +730,10 @@ class Bench(Base):
                 "use_rq_workerpool": self.bench_config.get("use_rq_workerpool", False),
                 "environment_variables": self.bench_config.get("environment_variables"),
                 "gunicorn_threads_per_worker": self.bench_config.get("gunicorn_threads_per_worker"),
+                # Worker recycling. Upstream's 5000/1000 recycles every worker every ~90 s at
+                # ~100 req/s and starts each one cold for every site on a multi-site bench.
+                "gunicorn_max_requests": self.bench_config.get("gunicorn_max_requests", 5000),
+                "gunicorn_max_requests_jitter": self.bench_config.get("gunicorn_max_requests_jitter", 1000),
                 "is_code_server_enabled": self.bench_config.get("is_code_server_enabled", False),
                 "custom_workers": self.common_site_config.get("workers", {}),
                 "custom_workers_group": self._get_custom_workers_group(),
