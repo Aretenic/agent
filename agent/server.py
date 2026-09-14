@@ -564,16 +564,21 @@ class Server(Base):
 
         target = Bench(target, self)
         self.move_site(site, target)
+
+        site = Site(name, target)
+        # Turn maintenance off before nginx sends traffic to the target bench.
+        # Frappe caches site config per worker for 60 s, so a worker that first
+        # sees the site with maintenance_mode still on keeps answering 503
+        # SessionStopped for up to a minute after it is switched off.
+        if activate:
+            site.disable_maintenance_mode()
+
         source.setup_nginx(ignore_missing_site_configs=True)
         target.setup_nginx_target()
         self.reload_nginx()
 
-        site = Site(name, target)
         with suppress(Exception):
             site.generate_theme_files()
-
-        if activate:
-            site.disable_maintenance_mode()
 
     @job("Update Site Migrate", priority="low")
     def update_site_migrate_job(
