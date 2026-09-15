@@ -642,6 +642,7 @@ class Site(Base):
         import boto3
 
         offsite_files = {}
+        encrypted_files = []
         try:
             bucket, auth, prefix = (
                 offsite["bucket"],
@@ -667,14 +668,28 @@ class Site(Base):
                 client_kwargs["endpoint_url"] = auth["ENDPOINT_URL"].strip()
             s3 = boto3.client("s3", **client_kwargs)
 
-            for backup_file in backup_files.values():
-                file_name = backup_file["file"].split(os.sep)[-1]
-                offsite_path = os.path.join(prefix, file_name)
-                offsite_files[file_name] = offsite_path
+            # ARETENIC PATCH (ADR 041 §5): with an age recipient, site_config goes offsite only
+            # encrypted, so a leaked backup does not carry the site's encryption_key. This server
+            # holds the public key only. No age, no upload: never fall back to plaintext.
+            config_recipient = offsite.get("config_age_recipient")
 
-                with open(backup_file["path"], "rb") as data:
+            for backup_type, backup_file in backup_files.items():
+                file_name = backup_file["file"].split(os.sep)[-1]
+                local_path = backup_file["path"]
+                offsite_path = os.path.join(prefix, file_name)
+
+                if backup_type == "site_config" and config_recipient:
+                    local_path = encrypt_with_age(local_path, config_recipient)
+                    encrypted_files.append(local_path)
+                    offsite_path += ".age"
+
+                offsite_files[file_name] = offsite_path
+                with open(local_path, "rb") as data:
                     s3.upload_fileobj(data, bucket, offsite_path)
         finally:
+            for encrypted in encrypted_files:
+                with contextlib.suppress(FileNotFoundError):
+                    os.remove(encrypted)
             if not keep_files_locally_after_offsite_backup:
                 for backup_file in backup_files.values():
                     with contextlib.suppress(FileNotFoundError):
@@ -1830,3 +1845,14 @@ print(">>>" + frappe.session.sid + "<<<")
         self.bench_execute(
             "execute frappe.website.doctype.website_theme.website_theme.generate_theme_files_if_not_exist"
         )
+
+
+def encrypt_with_age(path: str, recipient: str) -> str:
+    """Encrypt a file to an age X25519 recipient, next to it, and return the encrypted path."""
+    if not recipient.startswith("age1"):
+        raise ValueError("config_age_recipient is not an age public key")
+    encrypted = f"{path}.age"
+    subprocess.run(["age", "--encrypt", "--recipient", recipient, "--output", encrypted, path], check=True)
+    if not os.path.getsize(encrypted):
+        raise RuntimeError(f"age produced an empty file for {path}")
+    return encrypted
