@@ -755,6 +755,14 @@ WHERE `schema` IN (
         except Exception:
             return False
 
+    def flush_binlogs(self, private_ip: str, mariadb_root_password: str) -> dict:
+        """ARETENIC: close the current binlog, so Press uploads the last hour (ADR 041 §7)."""
+        mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
+        ok, output = mariadb.execute_query("FLUSH BINARY LOGS;", commit=True)
+        if not ok:
+            raise Exception(f"FLUSH BINARY LOGS failed: {output}")
+        return {"current_binlog": self._get_current_binlog()}
+
     @job("Purge Binlogs By Size Limit", priority="low")
     def purge_binlogs_by_size_limit(self, private_ip: str, mariadb_root_password: str, max_binlog_gb: int):
         output = self.find_binlogs_by_size_limit(max_binlog_gb)
@@ -987,19 +995,16 @@ WHERE `schema` IN (
         )
         region = auth.get("REGION")
 
+        # ARETENIC PATCH: honour ENDPOINT_URL (Cloudflare R2), as upload_offsite_backup does
+        client_kwargs = {
+            "aws_access_key_id": auth["ACCESS_KEY"],
+            "aws_secret_access_key": auth["SECRET_KEY"],
+        }
         if region:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-                region_name=region,
-            )
-        else:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-            )
+            client_kwargs["region_name"] = region.strip()
+        if auth.get("ENDPOINT_URL"):
+            client_kwargs["endpoint_url"] = auth["ENDPOINT_URL"].strip()
+        s3 = boto3.client("s3", **client_kwargs)
 
         tmp_folder = get_tmp_folder_path()
         for binlog in binlogs:

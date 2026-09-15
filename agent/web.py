@@ -1391,6 +1391,12 @@ def purge_binlog():
     return jsonify(DatabaseServer()._purge_binlog(**data))
 
 
+@application.route("/database/binlogs/flush", methods=["POST"])
+def flush_binlogs():
+    data = request.json
+    return jsonify(DatabaseServer().flush_binlogs(**data))
+
+
 @application.route("/database/binlogs/purge_by_size_limit", methods=["POST"])
 def purge_binlogs_by_size_limit():
     data = request.json
