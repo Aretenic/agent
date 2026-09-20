@@ -1233,7 +1233,10 @@ class Server(Base):
             {
                 "proxy_ip": self.config.get("proxy_ip"),
                 "tls_protocols": self.config.get("tls_protocols"),
-                "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", False),
+                # ADR 043: Prometheus scrapes nginx through VTS. Upstream flipped this default to False
+                # in 1184f2edd, and every agent update regenerates nginx, so taking that default drops
+                # the status location and the nginx job 404s.
+                "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
                 "conf_directory": os.path.join(self.config.get("benches_directory"), "*", "nginx.conf"),
                 "ip_accept": self.config.get("ip_accept", []),
@@ -1256,7 +1259,10 @@ class Server(Base):
                 "trace": self.config.get("trace", False),
                 "tls_directory": self.config["tls_directory"],
                 "nginx_directory": self.nginx_directory,
-                "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", False),
+                # ADR 043: Prometheus scrapes nginx through VTS. Upstream flipped this default to False
+                # in 1184f2edd, and every agent update regenerates nginx, so taking that default drops
+                # the status location and the nginx job 404s.
+                "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "pages_directory": os.path.join(self.directory, "repo", "agent", "pages"),
                 "tls_protocols": self.config.get("tls_protocols"),
                 "press_url": self.config.get("press_url"),
