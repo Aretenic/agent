@@ -203,6 +203,7 @@ def build_image():
         build_name=data.get("deploy_candidate_build"),
         deploy_candidate_params=data.get("deploy_candidate_params"),
         ssh_keys=data.get("ssh_keys"),
+        asset_store=data.get("asset_store"),
     )
     job = image_builder.run_remote_builder()
     return {"job": job}
@@ -564,6 +565,7 @@ def new_site_from_backup(bench):
             data.get("public"),
             data.get("private"),
             data.get("skip_failing_patches", False),
+            data.get("skip_migrate", False),
         )
     )
     return {"job": job}
@@ -725,6 +727,13 @@ def backup_site(bench, site):
         .sites[site]
         .backup_job(with_files, offsite, keep_files_locally_after_offsite_backup, stream)
     )
+    return {"job": job}
+
+
+@application.route("/benches/<string:bench>/sites/<string:site>/fix_global_search", methods=["POST"])
+@validate_bench_and_site
+def fix_global_search(bench, site):
+    job = Server().benches[bench].sites[site].fix_global_search()
     return {"job": job}
 
 

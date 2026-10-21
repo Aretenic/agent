@@ -7,6 +7,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, TypedDict
 
@@ -141,11 +142,15 @@ def check_python_syntax(dirpath: str) -> str:
         # still compiles everything with the app's own Python.
         return ""
     command = f"{_python} -m compileall -q -o 0 {dirpath}"
-    proc = subprocess.run(
-        shlex.split(command),
-        text=True,
-        capture_output=True,
-    )
+    # Bytecode records its source path, which differs per build, so keep it out of the
+    # build context: a changed file there stops Docker from reusing the app's build step
+    with tempfile.TemporaryDirectory() as pycache_prefix:
+        proc = subprocess.run(
+            shlex.split(command),
+            text=True,
+            capture_output=True,
+            env={**os.environ, "PYTHONPYCACHEPREFIX": pycache_prefix},
+        )
     if proc.returncode == 0:
         return ""
 
