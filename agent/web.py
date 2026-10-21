@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from flask import Flask, Response, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
+from redis.exceptions import AuthenticationError as RedisAuthenticationError
 from redis.exceptions import ConnectionError as RedisConnectionError
 from rq.exceptions import NoSuchJobError
 from rq.job import Job as RQJob
@@ -368,8 +369,14 @@ def get_metrics():
         rq_port = bench.bench_config.get("rq_port")
         if rq_port is not None:
             try:
-                metrics = get_metrics(name, rq_port)
+                # Aretenic: the bench's queue Redis has required a password since upstream's c04e401;
+                # without it every bench fails auth and the endpoint answers an empty 200
+                password = bench._get_redis_passwords(bench.common_site_config)
+                metrics = get_metrics(name, rq_port, password)
                 benches_metrics.append(metrics)
+            except RedisAuthenticationError as e:
+                # A subclass of ConnectionError, so it must come first or it is silently ignored below
+                log.error(f"Failed to get metrics for {name} on port {rq_port}: {e}")
             except RedisConnectionError:
                 """
                 Ignore RedisConnectionError, don't log it
