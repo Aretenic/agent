@@ -126,6 +126,13 @@ server {
 		proxy_pass http://{{ bench_name }}-socketio-server;
 	}
 
+	# Aretenic: SCORM packages address files by real name, and the .html rewrites in location /
+	# below send /scorm/<pkg>/index.html back to the launcher. ^~ beats them; /nonexistent, not $uri,
+	# so a public/scorm/ tree on disk cannot bypass the package inventory.
+	location ^~ /scorm/ {
+		try_files /nonexistent @webserver;
+	}
+
 	location / {
 
 		rewrite ^(.+)/$ https://$host$1 permanent;
@@ -296,6 +303,13 @@ server {
 		proxy_set_header Host $host;
 
 		proxy_pass http://{{ bench_name }}-socketio-server;
+	}
+
+	# Aretenic: SCORM packages address files by real name, and the .html rewrites in location /
+	# below send /scorm/<pkg>/index.html back to the launcher. ^~ beats them; /nonexistent, not $uri,
+	# so a public/scorm/ tree on disk cannot bypass the package inventory.
+	location ^~ /scorm/ {
+		try_files /nonexistent @webserver;
 	}
 
 	location / {
